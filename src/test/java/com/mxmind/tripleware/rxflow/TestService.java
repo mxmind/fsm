@@ -166,8 +166,9 @@ public class TestService {
             File dest = new File(path.toString());
             if(dest.createNewFile()) {
                 ImageIO.write(picture.getImage(), ext, dest);
+
                 picture.setDownloaded(true);
-                picture.setUuid(UUID.fromString(pathToFile).toString());
+                picture.setUuid(UUID.randomUUID().toString());
             }
         } catch (IOException ex) {
             transition.fsm().onError(ex);
