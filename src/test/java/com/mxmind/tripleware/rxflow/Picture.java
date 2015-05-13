@@ -19,6 +19,8 @@ public class Picture {
 
     private String url;
 
+    private String uuid;
+
     private boolean downloaded;
 
     public void setImage(RenderedImage image) {
@@ -59,5 +61,13 @@ public class Picture {
 
     public void setDownloaded(boolean downloaded) {
         this.downloaded = downloaded;
+    }
+
+    public String getUuid() {
+        return uuid;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
     }
 }

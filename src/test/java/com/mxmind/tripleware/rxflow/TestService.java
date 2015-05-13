@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.EnumSet;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -45,17 +46,17 @@ public class TestService {
     private final AtomicBoolean result = new AtomicBoolean();
 
     public Boolean processGravatarPicture() {
-        Flow.initialize(States.init_gravatar, this::onComplete, this::onError);
+        Flow.initialize(States.gravatar, this::onComplete, this::onError);
         return result.get();
     }
 
     public Boolean processFacebookPicture() {
-        Flow.initialize(States.init_facebook, this::onComplete, this::onError);
+        Flow.initialize(States.facebook, this::onComplete, this::onError);
         return result.get();
     }
 
     public Boolean processManualPicture() {
-        Flow.initialize(States.init_manual, this::onComplete, this::onError);
+        Flow.initialize(States.manual, this::onComplete, this::onError);
         return result.get();
     }
 
@@ -166,7 +167,7 @@ public class TestService {
             if(dest.createNewFile()) {
                 ImageIO.write(picture.getImage(), ext, dest);
                 picture.setDownloaded(true);
-
+                picture.setUuid(UUID.fromString(pathToFile).toString());
             }
         } catch (IOException ex) {
             transition.fsm().onError(ex);
@@ -179,7 +180,7 @@ public class TestService {
 
     private enum States implements State<Picture> {
 
-        init_gravatar {
+        gravatar {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
@@ -189,7 +190,7 @@ public class TestService {
             }
         },
 
-        init_facebook {
+        facebook {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
@@ -199,7 +200,7 @@ public class TestService {
             }
         },
 
-        init_manual {
+        manual {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {

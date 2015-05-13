@@ -42,13 +42,11 @@ public class Flow<D> {
         this.initState = initState;
     }
 
-    public static <D> D initialize(State<D> initState,
+    public static <D> void initialize(State<D> initState,
                                    Consumer<FlowObserver> completeHandler,
                                    BiConsumer<FlowObserver, Exception> errorHandler) {
         Flow<D> flow = new Flow<>(initState);
         flow.observable.subscribe(new FlowObserver<>(completeHandler, errorHandler));
-
-        return null;
     }
 
     public static class FlowObserver<D> implements Observer<State<D>> {
