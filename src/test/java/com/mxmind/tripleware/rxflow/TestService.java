@@ -3,6 +3,7 @@ package com.mxmind.tripleware.rxflow;
 import com.mxmind.tripleware.publicprofile.utils.EmailEncoder;
 import org.apache.commons.codec.digest.MessageDigestAlgorithms;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.slf4j.Logger;
@@ -90,7 +91,7 @@ public class TestService {
 
         try {
             client.execute(get, response -> {
-                if (response.getStatusLine().getStatusCode() == 200) {
+                if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
                     HttpEntity entity = response.getEntity();
 
                     if (entity.isStreaming()) {
@@ -104,10 +105,16 @@ public class TestService {
             });
         } catch (IOException ex) {
             transition.fsm().onError(ex);
+        } finally {
+            client.getConnectionManager().shutdown();
         }
     }
 
-    private void processImage(Transition<Picture> transition) {
+    private void processExternalPicture(Transition<Picture> transition) {
+
+    }
+
+    private void processPicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
         try {
             BufferedImage source = (BufferedImage) picture.getImage();
@@ -136,11 +143,9 @@ public class TestService {
                 picture.getSource(),
                 ext
             );
+            Path path = Paths.get(pathToFile);
+            if (Files.exists(path)) Files.delete(path);
 
-            final Path path = Paths.get(pathToFile);
-            if (Files.exists(path)) {
-                Files.delete(path);
-            }
             File dest = new File(path.toString());
             dest.createNewFile();
 
@@ -183,16 +188,16 @@ public class TestService {
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
                     service.receivePicture(transition);
-                    transition.fsm().onNext(process_image);
+                    transition.fsm().onNext(process_picture);
                 });
             }
         },
 
-        process_image {
+        process_picture {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.processImage(transition);
+                    service.processPicture(transition);
                     transition.fsm().onNext(complete);
                 });
             }
@@ -209,7 +214,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    if (state.equals(process_image)) {
+                    if (state.equals(process_picture)) {
                         service.savePicture(transition);
                     }
                 });
