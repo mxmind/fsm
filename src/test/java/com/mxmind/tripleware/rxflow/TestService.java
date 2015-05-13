@@ -44,8 +44,8 @@ public class TestService {
     public Boolean processGravatar() {
         final AtomicBoolean result = new AtomicBoolean();
         new Flow<>(States.init_gravatar, States.error).init((fsm) -> {
-            final Picture data = (Picture) fsm.getData();
-            result.set(data.isDownloaded());
+            final Picture picture = (Picture) fsm.getData();
+            result.set(picture.isDownloaded());
         });
 
         return result.get();
@@ -56,17 +56,17 @@ public class TestService {
      */
 
     private void prepareGravatarData(Transition<Picture> transition) {
-        final Picture data = new Picture();
+        final Picture picture = new Picture();
         final String emailHash = EmailEncoder.encode(MessageDigestAlgorithms.MD5, "mxmind@gmail.com");
 
-        data.setUrl(String.format(GRAVATAR_URL, emailHash));
-        data.setSource("gravatar");
+        picture.setUrl(String.format(GRAVATAR_URL, emailHash));
+        picture.setSource("gravatar");
 
-        transition.setData(data);
+        transition.setData(picture);
     }
 
     private void receiveGravatarPicture(Transition<Picture> transition) {
-        final Picture data = transition.getData();
+        final Picture picture = transition.getData();
         final HttpGet get = new HttpGet(transition.getData().getUrl());
 
         try {
@@ -75,9 +75,9 @@ public class TestService {
                     HttpEntity entity = response.getEntity();
 
                     if (entity.isStreaming()) {
-                        data.setContentType(entity.getContentType().getValue());
+                        picture.setContentType(entity.getContentType().getValue());
                         BufferedImage source = ImageIO.read(entity.getContent());
-                        data.setImage(source);
+                        picture.setImage(source);
                     }
                 }
 
@@ -89,9 +89,9 @@ public class TestService {
     }
 
     private void processImage(Transition<Picture> transition) {
-        final Picture data = transition.getData();
+        final Picture picture = transition.getData();
         try {
-            BufferedImage source = (BufferedImage) data.getImage();
+            BufferedImage source = (BufferedImage) picture.getImage();
             int width = source.getWidth(), height = source.getHeight(), type = source.getType();
 
             BufferedImage image = new BufferedImage(100, 100, type);
@@ -100,7 +100,7 @@ public class TestService {
             graphics.drawImage(source, 0, 0, 100, 100, 0, 0, width, height, null);
             graphics.dispose();
 
-            data.setImage(image);
+            picture.setImage(image);
 
         } catch (Exception ex) {
             transition.fsm().onError(ex);
@@ -108,8 +108,8 @@ public class TestService {
     }
 
     private void savePicture(Transition<Picture> transition) {
-        final Picture data = transition.getData();
-        final String ext = data.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
+        final Picture picture = transition.getData();
+        final String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
 
         try {
             String pathToFile = String.format("/Users/vzdomish/Development/RxPicture/src/test/resources/tmp.%s", ext);
@@ -119,8 +119,8 @@ public class TestService {
             }
 
             File file = Files.createFile(path).toFile();
-            ImageIO.write(data.getImage(), ext, file);
-            data.setDownloaded(true);
+            ImageIO.write(picture.getImage(), ext, file);
+            picture.setDownloaded(true);
 
         } catch (IOException ex) {
             transition.fsm().onError(ex);
@@ -138,12 +138,12 @@ public class TestService {
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
                     service.prepareGravatarData(transition);
-                    transition.fsm().onNext(process_gravatar);
+                    transition.fsm().onNext(receive_gravatar);
                 });
             }
         },
 
-        process_gravatar {
+        receive_gravatar {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
