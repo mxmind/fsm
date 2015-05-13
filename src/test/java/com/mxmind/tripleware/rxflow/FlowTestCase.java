@@ -4,8 +4,6 @@ import com.mxmind.tripleware.rxflow.configs.TestConfig;
 import junit.framework.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestExecutionListeners;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
@@ -29,8 +27,6 @@ import javax.inject.Inject;
         DirtiesContextTestExecutionListener.class,
 })
 public class FlowTestCase {
-
-    private static final Logger LOG = LoggerFactory.getLogger(FlowTestCase.class);
 
     @Inject
     private TestService service;

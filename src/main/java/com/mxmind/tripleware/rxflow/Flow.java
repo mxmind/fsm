@@ -6,6 +6,7 @@ import rx.subscriptions.BooleanSubscription;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -17,20 +18,18 @@ import java.util.function.Consumer;
  */
 public class Flow<D> {
 
-    private final Observable<State> fsm;
+    private State<D> initState;
 
-    private State initState;
-
-    private State errorState;
-
-    private D data;
+    private final Observable<State<D>> observable;
 
     {
-        fsm = Observable.create((final Observer<State> observer) -> {
+        observable = Observable.create((final Observer<State<D>> observer) -> {
             BooleanSubscription sub = new BooleanSubscription();
             try {
                 Executors.callable(() -> {
-                    if (!sub.isUnsubscribed()) observer.onNext(initState);
+                    if (!sub.isUnsubscribed()) {
+                        observer.onNext(initState);
+                    }
                 }).call();
             } catch (Exception ex) {
                 observer.onError(ex);
@@ -39,52 +38,48 @@ public class Flow<D> {
         });
     }
 
-    public Flow(final State initState, final State errorState) {
+    private Flow(final State<D> initState) {
         this.initState = initState;
-        this.errorState = errorState;
     }
 
-    public void init(Consumer<FlowObserver> callback) {
-        fsm.subscribe(new FlowObserver<>(this, callback));
+    public static <D> D initialize(State<D> initState,
+                                   Consumer<FlowObserver> completeHandler,
+                                   BiConsumer<FlowObserver, Exception> errorHandler) {
+        Flow<D> flow = new Flow<>(initState);
+        flow.observable.subscribe(new FlowObserver<>(completeHandler, errorHandler));
+
+        return null;
     }
 
-    public State getErrorState() {
-        return errorState;
-    }
+    public static class FlowObserver<D> implements Observer<State<D>> {
 
-    public void setErrorState(State errorState) {
-        this.errorState = errorState;
-    }
+        private final AtomicReference<State<D>> toState = new AtomicReference<>();
 
-    public static class FlowObserver<D> implements Observer<State> {
-
-        private final AtomicReference<State> toState = new AtomicReference<>();
-
-        private final AtomicReference<State> fromState = new AtomicReference<>();
+        private final AtomicReference<State<D>> fromState = new AtomicReference<>();
 
         private D data;
 
-        private Flow<D> flow;
+        private Consumer<FlowObserver> completeHandler;
 
-        private Consumer<FlowObserver> callback;
+        private BiConsumer<FlowObserver, Exception> errorHandler;
 
-        public FlowObserver(Flow<D> flow, Consumer<FlowObserver> callback) {
-            this.flow = flow;
-            this.callback = callback;
+        public FlowObserver(Consumer<FlowObserver> completeHandler, BiConsumer<FlowObserver, Exception> errorHandler) {
+            this.completeHandler = completeHandler;
+            this.errorHandler = errorHandler;
         }
 
         @Override
         public void onCompleted() {
-            callback.accept(this);
+            completeHandler.accept(this);
         }
 
         @Override
         public void onError(Exception ex) {
-            this.onNext(flow.getErrorState());
+            errorHandler.accept(this, ex);
         }
 
         @Override
-        public void onNext(State state) {
+        public void onNext(State<D> state) {
             if (fromState.get() == null) {
                 fromState.set(state);
                 toState.set(state);
@@ -93,6 +88,10 @@ public class Flow<D> {
             }
             final Transition<D> transition = new Transition<>(this, fromState.get());
             toState.get().onTransition(transition);
+        }
+
+        public State<D> fromState() {
+            return fromState.get();
         }
 
         public void setData(D value) {

@@ -19,12 +19,9 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 /**
  * RxPicture
@@ -47,28 +44,38 @@ public class TestService {
 
     private final AtomicBoolean result = new AtomicBoolean();
 
-    private Consumer<Flow.FlowObserver> onComplete = (fsm) -> {
-        final Picture picture = (Picture) fsm.getData();
-        result.set(picture.isDownloaded());
-    };
-
     public Boolean processGravatarPicture() {
-        new Flow<>(States.init_gravatar, States.error).init(onComplete);
+        Flow.initialize(States.init_gravatar, this::onComplete, this::onError);
         return result.get();
     }
 
     public Boolean processFacebookPicture() {
-        new Flow<>(States.init_facebook, States.error).init(onComplete);
+        Flow.initialize(States.init_facebook, this::onComplete, this::onError);
         return result.get();
     }
 
     public Boolean processManualPicture() {
-        new Flow<>(States.init_manual, States.error).init(onComplete);
+        Flow.initialize(States.init_manual, this::onComplete, this::onError);
         return result.get();
     }
 
     /*
      * section: fsm handlers
+     */
+
+    private void onComplete(Flow.FlowObserver<Picture> fsm){
+        result.set(fsm.getData().isDownloaded());
+    }
+
+    private void onError(Flow.FlowObserver<Picture> fsm, Exception ex) {
+        if(LOG.isErrorEnabled()) {
+            LOG.error(String.format("Exception occurred on state: %s", fsm.fromState()), ex);
+        }
+        fsm.onNext(States.error);
+    }
+
+    /*
+     * section: picture processing
      */
 
     private void prepareGravatarPicture(Transition<Picture> transition) {
@@ -152,7 +159,7 @@ public class TestService {
 
         try {
             final String pathToFile = String.format(
-                "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
+                "/Users/mxmind/Development/RxPicture/src/test/resources/%s.%s",
                 picture.getSource(),
                 ext
             );
@@ -160,12 +167,12 @@ public class TestService {
             if (Files.exists(path)) Files.delete(path);
 
             File dest = new File(path.toString());
-            dest.createNewFile();
+            if(dest.createNewFile()) {
+                ImageIO.write(picture.getImage(), ext, dest);
+                picture.setDownloaded(true);
 
-            ImageIO.write(picture.getImage(), ext, dest);
-            picture.setDownloaded(true);
-
-        } catch (IOException ex) {
+            }
+        } catch (Exception ex) {
             transition.fsm().onError(ex);
         }
     }

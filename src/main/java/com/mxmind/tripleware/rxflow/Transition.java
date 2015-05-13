@@ -2,8 +2,6 @@ package com.mxmind.tripleware.rxflow;
 
 import com.mxmind.tripleware.rxflow.exceptions.RxTransitionException;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 
@@ -20,9 +18,6 @@ public class Transition<D> {
 
     private State state;
 
-
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
-
     public <F extends Flow.FlowObserver<D>> Transition(F fsm, State state) {
         this.fsm = fsm;
         this.state = state;
@@ -30,10 +25,6 @@ public class Transition<D> {
 
     public Flow.FlowObserver<D> fsm(){
         return fsm;
-    }
-
-    public State fromState() {
-        return state;
     }
 
     public void setData(D value) {
