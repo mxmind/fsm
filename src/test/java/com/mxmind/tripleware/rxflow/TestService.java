@@ -62,6 +62,11 @@ public class TestService {
         return result.get();
     }
 
+    public Boolean processManualPicture() {
+        new Flow<>(States.init_manual, States.error).init(onComplete);
+        return result.get();
+    }
+
     /*
      * section: fsm handlers
      */
@@ -79,8 +84,16 @@ public class TestService {
     private void prepareFacebookPicture(Transition<Picture> transition) {
         final Picture picture = new Picture();
         final String fbUid = "100003234733056";
+
         picture.setUrl(String.format(FACEBOOK_URL, fbUid));
         picture.setSource("facebook");
+
+        transition.setData(picture);
+    }
+
+    private void prepareManualPicture(Transition<Picture> transition) {
+        final Picture picture = new Picture();
+        picture.setSource("manual");
 
         transition.setData(picture);
     }
@@ -178,6 +191,16 @@ public class TestService {
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
                     service.prepareFacebookPicture(transition);
+                    transition.fsm().onNext(receive_picture);
+                });
+            }
+        },
+
+        init_manual {
+            @Override
+            public void onTransition(Transition<Picture> transition) {
+                transition.handle((state) -> {
+                    service.prepareManualPicture(transition);
                     transition.fsm().onNext(receive_picture);
                 });
             }
