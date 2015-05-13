@@ -38,6 +38,6 @@ public class FlowTestCase {
     @Test
     public void testFlow() {
         Boolean isGravatarReceived = service.processGravatar();
-        Assert.assertFalse(isGravatarReceived);
+        Assert.assertTrue(isGravatarReceived);
     }
 }
