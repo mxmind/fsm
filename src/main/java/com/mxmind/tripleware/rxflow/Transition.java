@@ -16,7 +16,7 @@ public class Transition<D> {
 
     private State state;
 
-    public <F extends Flow.FlowObserver<D>> Transition(F fsm, State state) {
+    public Transition(Flow.FlowObserver<D> fsm, State state) {
         this.fsm = fsm;
         this.state = state;
     }
