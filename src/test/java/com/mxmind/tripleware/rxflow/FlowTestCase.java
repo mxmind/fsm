@@ -36,8 +36,14 @@ public class FlowTestCase {
     private TestService service;
 
     @Test
-    public void testFlow() {
-        Boolean isGravatarReceived = service.processGravatar();
-        Assert.assertTrue(isGravatarReceived);
+    public void testGravatarPictureFlow() {
+        Boolean isReceived = service.processGravatarPicture();
+        Assert.assertTrue(isReceived);
+    }
+
+    @Test
+    public void testFacebookPictureFlow() {
+        Boolean isReceived = service.processFacebookPicture();
+        Assert.assertTrue(isReceived);
     }
 }

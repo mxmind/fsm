@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * RxPicture
@@ -38,16 +39,25 @@ public class TestService {
 
     private static final String GRAVATAR_URL = "http://gravatar.com/avatar/%s?s=200";
 
+    private static final String FACEBOOK_URL = "http://graph.facebook.com/%s/picture?type=large";
+
     @Resource(name = "httpClient")
     private HttpClient client;
 
-    public Boolean processGravatar() {
-        final AtomicBoolean result = new AtomicBoolean();
-        new Flow<>(States.init_gravatar, States.error).init((fsm) -> {
-            final Picture picture = (Picture) fsm.getData();
-            result.set(picture.isDownloaded());
-        });
+    private final AtomicBoolean result = new AtomicBoolean();
 
+    private Consumer<Flow.FlowObserver> onComplete = (fsm) -> {
+        final Picture picture = (Picture) fsm.getData();
+        result.set(picture.isDownloaded());
+    };
+
+    public Boolean processGravatarPicture() {
+        new Flow<>(States.init_gravatar, States.error).init(onComplete);
+        return result.get();
+    }
+
+    public Boolean processFacebookPicture() {
+        new Flow<>(States.init_facebook, States.error).init(onComplete);
         return result.get();
     }
 
@@ -55,7 +65,7 @@ public class TestService {
      * section: fsm handlers
      */
 
-    private void prepareGravatarData(Transition<Picture> transition) {
+    private void prepareGravatarPicture(Transition<Picture> transition) {
         final Picture picture = new Picture();
         final String emailHash = EmailEncoder.encode(MessageDigestAlgorithms.MD5, "mxmind@gmail.com");
 
@@ -65,7 +75,16 @@ public class TestService {
         transition.setData(picture);
     }
 
-    private void receiveGravatarPicture(Transition<Picture> transition) {
+    private void prepareFacebookPicture(Transition<Picture> transition) {
+        final Picture picture = new Picture();
+        final String fbUid = "100003234733056";
+        picture.setUrl(String.format(FACEBOOK_URL, fbUid));
+        picture.setSource("facebook");
+
+        transition.setData(picture);
+    }
+
+    private void receivePicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
         final HttpGet get = new HttpGet(transition.getData().getUrl());
 
@@ -112,14 +131,20 @@ public class TestService {
         final String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
 
         try {
-            String pathToFile = String.format("/Users/vzdomish/Development/RxPicture/src/test/resources/tmp.%s", ext);
+            final String pathToFile = String.format(
+                "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
+                picture.getSource(),
+                ext
+            );
+
             final Path path = Paths.get(pathToFile);
             if (Files.exists(path)) {
                 Files.delete(path);
             }
+            File dest = new File(path.toString());
+            dest.createNewFile();
 
-            File file = Files.createFile(path).toFile();
-            ImageIO.write(picture.getImage(), ext, file);
+            ImageIO.write(picture.getImage(), ext, dest);
             picture.setDownloaded(true);
 
         } catch (IOException ex) {
@@ -137,17 +162,27 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.prepareGravatarData(transition);
-                    transition.fsm().onNext(receive_gravatar);
+                    service.prepareGravatarPicture(transition);
+                    transition.fsm().onNext(receive_picture);
                 });
             }
         },
 
-        receive_gravatar {
+        init_facebook {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.receiveGravatarPicture(transition);
+                    service.prepareFacebookPicture(transition);
+                    transition.fsm().onNext(receive_picture);
+                });
+            }
+        },
+
+        receive_picture {
+            @Override
+            public void onTransition(Transition<Picture> transition) {
+                transition.handle((state) -> {
+                    service.receivePicture(transition);
                     transition.fsm().onNext(process_image);
                 });
             }
