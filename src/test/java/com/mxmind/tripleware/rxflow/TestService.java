@@ -136,21 +136,17 @@ public class TestService {
 
     private void processPicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
-        try {
-            BufferedImage source = (BufferedImage) picture.getImage();
-            int width = source.getWidth(), height = source.getHeight(), type = source.getType();
 
-            BufferedImage image = new BufferedImage(100, 100, type);
-            Graphics2D graphics = image.createGraphics();
-            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            graphics.drawImage(source, 0, 0, 100, 100, 0, 0, width, height, null);
-            graphics.dispose();
+        BufferedImage source = (BufferedImage) picture.getImage();
+        BufferedImage image = new BufferedImage(100, 100, source.getType());
 
-            picture.setImage(image);
+        int width = source.getWidth(), height = source.getHeight();
+        Graphics2D graphics = image.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        graphics.drawImage(source, 0, 0, 100, 100, 0, 0, width, height, null);
+        graphics.dispose();
 
-        } catch (Exception ex) {
-            transition.fsm().onError(ex);
-        }
+        picture.setImage(image);
     }
 
     private void savePicture(Transition<Picture> transition) {
@@ -172,7 +168,7 @@ public class TestService {
                 picture.setDownloaded(true);
 
             }
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             transition.fsm().onError(ex);
         }
     }

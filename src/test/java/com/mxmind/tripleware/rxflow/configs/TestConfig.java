@@ -1,15 +1,7 @@
 package com.mxmind.tripleware.rxflow.configs;
 
 import com.mxmind.tripleware.rxflow.TestService;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.HttpRequestRetryHandler;
-import org.apache.http.client.params.ClientPNames;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
-import org.apache.http.impl.client.SystemDefaultHttpClient;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.*;
 
 /**
  * RxPicture
@@ -24,14 +16,8 @@ import org.springframework.context.annotation.Configuration;
 public class TestConfig {
 
     @Bean
-    HttpClient httpClient(){
-        DefaultHttpClient client = new SystemDefaultHttpClient();
-        HttpRequestRetryHandler handler = new StandardHttpRequestRetryHandler(2, true);
-        client.setHttpRequestRetryHandler(handler);
-        client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
-        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
-
-        return client;
+    HttpClientFactoryBean httpClient(){
+        return new HttpClientFactoryBean();
     }
 
     @Bean
