@@ -21,6 +21,10 @@ public class Picture {
 
     private boolean downloaded;
 
+    private Crop crop;
+
+    private PictureOptions options;
+
     public void setImage(RenderedImage image) {
         this.image = image;
     }
@@ -63,5 +67,24 @@ public class Picture {
 
     public void setUuid(String uuid) {
         this.uuid = uuid;
+    }
+
+    public Crop getCrop() {
+        if(crop == null){
+            return Crop.EMPTY;
+        }
+        return crop;
+    }
+
+    public void setCrop(Crop crop) {
+        this.crop = crop;
+    }
+
+    public PictureOptions getOptions() {
+        return options;
+    }
+
+    public void setOptions(PictureOptions options) {
+        this.options = options;
     }
 }

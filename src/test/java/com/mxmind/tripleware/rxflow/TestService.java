@@ -3,8 +3,10 @@ package com.mxmind.tripleware.rxflow;
 import com.mxmind.tripleware.publicprofile.dtos.FacebookPicture;
 import com.mxmind.tripleware.publicprofile.dtos.GravatarPicture;
 import com.mxmind.tripleware.publicprofile.dtos.Picture;
+import com.mxmind.tripleware.publicprofile.dtos.PictureOptions;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.ClientPNames;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -31,8 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * RxPicture
  *
- * @version 1.0.0
  * @author mxmind
+ * @version 1.0.0
  * @since 1.0.0
  */
 @Service("testService")
@@ -43,12 +45,13 @@ public class TestService {
     private final AtomicBoolean result = new AtomicBoolean();
 
     public Boolean processGravatarPicture() {
-        final Picture picture = new GravatarPicture( "mxmind@gmail.com");
+        final Picture picture = new GravatarPicture("test@completelybogus.wvrgroup.internal");
         return initFromState(States.gravatar, picture);
     }
 
     public Boolean processFacebookPicture() {
         final Picture picture = new FacebookPicture("100003234733056");
+
         return initFromState(States.facebook, picture);
     }
 
@@ -57,7 +60,7 @@ public class TestService {
         return initFromState(States.manual, picture);
     }
 
-    private Boolean initFromState(States state, Picture picture){
+    private Boolean initFromState(States state, Picture picture) {
         Flow.initialize(state, picture, this::onComplete, this::onError);
         return result.get();
     }
@@ -66,12 +69,12 @@ public class TestService {
      * section: fsm handlers
      */
 
-    private void onComplete(Flow.FlowObserver<Picture> fsm){
+    private void onComplete(Flow.FlowObserver<Picture> fsm) {
         result.set(fsm.getData().isDownloaded());
     }
 
     private void onError(Flow.FlowObserver<Picture> fsm, Exception ex) {
-        if(LOG.isErrorEnabled()) {
+        if (LOG.isErrorEnabled()) {
             LOG.error(String.format("Exception occurred on state: %s", fsm.fromState()), ex);
         }
         fsm.onNext(States.error);
@@ -83,10 +86,12 @@ public class TestService {
 
     private void prepareGravatarPicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
+        picture.setOptions(PictureOptions.LARGE);
     }
 
     private void prepareFacebookPicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
+        picture.setOptions(PictureOptions.LARGE);
     }
 
     private void prepareManualPicture(Transition<Picture> transition) {
@@ -94,15 +99,34 @@ public class TestService {
         picture.setSource("manual");
     }
 
+    private boolean checkForPicture(Transition<Picture> transition) {
+        AtomicBoolean result = new AtomicBoolean(Boolean.FALSE);
+
+        if (FacebookPicture.class.isInstance(transition.getData())) {
+            return result.get();
+        }
+        GravatarPicture picture = (GravatarPicture) transition.getData();
+
+        HttpClient client = getDefaultHttpClient();
+        HttpGet get = new HttpGet(picture.getCheckUrl());
+
+        try {
+            client.execute(get, response -> {
+                result.set(response.getStatusLine().getStatusCode() == HttpStatus.SC_NOT_FOUND);
+                return response;
+            });
+            client.getConnectionManager().shutdown();
+        } catch (IOException ex) {
+            transition.fsm().onError(ex);
+        }
+        return result.get();
+    }
+
     private void receivePicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
 
         //TODO: create factory
-        DefaultHttpClient client = new SystemDefaultHttpClient();
-        client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
-        client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
-        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
-
+        HttpClient client = getDefaultHttpClient();
         HttpGet get = new HttpGet(transition.getData().getUrl());
 
         try {
@@ -119,10 +143,9 @@ public class TestService {
 
                 return response;
             });
+            client.getConnectionManager().shutdown();
         } catch (IOException ex) {
             transition.fsm().onError(ex);
-        } finally {
-            client.getConnectionManager().shutdown();
         }
     }
 
@@ -134,23 +157,29 @@ public class TestService {
         final Picture picture = transition.getData();
 
         BufferedImage source = (BufferedImage) picture.getImage();
-        BufferedImage image = new BufferedImage(100, 100, source.getType());
+        int w = source.getWidth(), h = source.getHeight();
+        int minHeight = picture.getOptions().getMinHeight();
 
-        int width = source.getWidth(), height = source.getHeight();
-        Graphics2D graphics = image.createGraphics();
-        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        graphics.drawImage(source, 0, 0, 100, 100, 0, 0, width, height, null);
-        graphics.dispose();
+        if (h < minHeight) {
+            int y = (minHeight - h) >> 1;
+            BufferedImage image = new BufferedImage(w, minHeight, source.getType());
 
-        picture.setImage(image);
+            Graphics2D g = image.createGraphics();
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, w, minHeight);
+            g.drawImage(source, 0, y, w, h + y, 0, 0, w, h, null);
+            g.dispose();
+
+            picture.setImage(image);
+        }
     }
 
     private void savePicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
-        final String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
 
         try {
-            final String pathToFile = String.format(
+            String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
+            String pathToFile = String.format(
                     "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
                     picture.getSource(),
                     ext
@@ -167,6 +196,15 @@ public class TestService {
         } catch (IOException ex) {
             transition.fsm().onError(ex);
         }
+    }
+
+    private HttpClient getDefaultHttpClient() {
+        DefaultHttpClient client = new SystemDefaultHttpClient();
+        client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
+        client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
+        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
+
+        return client;
     }
 
     /*

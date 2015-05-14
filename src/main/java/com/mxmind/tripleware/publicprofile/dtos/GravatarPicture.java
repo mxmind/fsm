@@ -12,7 +12,9 @@ import org.apache.commons.codec.digest.MessageDigestAlgorithms;
  */
 public class GravatarPicture extends Picture {
 
-    private static final String GRAVATAR_URL = "http://gravatar.com/avatar/%s?s=200";
+    private static final String GRAVATAR_URL_200 = "http://gravatar.com/avatar/%s?s=200";
+
+    private static final String GRAVATAR_URL_404 = "http://gravatar.com/avatar/%s?d=404";
 
     private final String email;
 
@@ -23,6 +25,11 @@ public class GravatarPicture extends Picture {
 
     public String getUrl() {
         String emailHash = EmailEncoder.encode(MessageDigestAlgorithms.MD5, email);
-        return String.format(GRAVATAR_URL, emailHash);
+        return String.format(GRAVATAR_URL_200, emailHash);
+    }
+
+    public String getCheckUrl(){
+        String emailHash = EmailEncoder.encode(MessageDigestAlgorithms.MD5, email);
+        return String.format(GRAVATAR_URL_404, emailHash);
     }
 }
