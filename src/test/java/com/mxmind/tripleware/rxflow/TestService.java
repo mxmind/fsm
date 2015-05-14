@@ -4,7 +4,6 @@ import com.mxmind.tripleware.publicprofile.utils.EmailEncoder;
 import org.apache.commons.codec.digest.MessageDigestAlgorithms;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.ClientPNames;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import javax.annotation.Resource;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import java.awt.*;
@@ -46,23 +44,28 @@ public class TestService {
 
     private static final String FACEBOOK_URL = "http://graph.facebook.com/%s/picture?type=large";
 
-    @Resource(name = "httpClient")
-    private HttpClient client;
-
     private final AtomicBoolean result = new AtomicBoolean();
 
     public Boolean processGravatarPicture() {
-        Flow.initialize(States.gravatar, this::onComplete, this::onError);
-        return result.get();
+        final Picture picture = new Picture();
+
+        return initFromState(States.gravatar, picture);
     }
 
     public Boolean processFacebookPicture() {
-        Flow.initialize(States.facebook, this::onComplete, this::onError);
-        return result.get();
+        final Picture picture = new Picture();
+
+        return initFromState(States.facebook, picture);
     }
 
     public Boolean processManualPicture() {
-        Flow.initialize(States.manual, this::onComplete, this::onError);
+        final Picture picture = new Picture();
+
+        return initFromState(States.manual, picture);
+    }
+
+    private Boolean initFromState(States state, Picture picture){
+        Flow.initialize(state, picture, this::onComplete, this::onError);
         return result.get();
     }
 
@@ -86,30 +89,27 @@ public class TestService {
      */
 
     private void prepareGravatarPicture(Transition<Picture> transition) {
-        final Picture picture = new Picture();
+        final Picture picture = transition.getData();
         final String emailHash = EmailEncoder.encode(MessageDigestAlgorithms.MD5, "mxmind@gmail.com");
 
         picture.setUrl(String.format(GRAVATAR_URL, emailHash));
         picture.setSource("gravatar");
 
-        transition.setData(picture);
+
     }
 
     private void prepareFacebookPicture(Transition<Picture> transition) {
-        final Picture picture = new Picture();
+        final Picture picture = transition.getData();
         final String fbUid = "100003234733056";
 
         picture.setUrl(String.format(FACEBOOK_URL, fbUid));
         picture.setSource("facebook");
 
-        transition.setData(picture);
     }
 
     private void prepareManualPicture(Transition<Picture> transition) {
-        final Picture picture = new Picture();
+        final Picture picture = transition.getData();
         picture.setSource("manual");
-
-        transition.setData(picture);
     }
 
     private void receivePicture(Transition<Picture> transition) {

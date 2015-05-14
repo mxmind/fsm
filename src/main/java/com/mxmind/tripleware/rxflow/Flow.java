@@ -43,10 +43,13 @@ public class Flow<D> {
     }
 
     public static <D> void initialize(FlowStates<D> initState,
-                                   Consumer<FlowObserver> completeHandler,
-                                   BiConsumer<FlowObserver, Exception> errorHandler) {
+                                      D data,
+                                      Consumer<FlowObserver> completeHandler,
+                                      BiConsumer<FlowObserver, Exception> errorHandler) {
         Flow<D> flow = new Flow<>(initState);
-        flow.observable.subscribe(new FlowObserver<>(completeHandler, errorHandler));
+        FlowObserver<Object> observer = new FlowObserver<>(data, completeHandler, errorHandler);
+
+        flow.observable.subscribe(observer);
     }
 
     public static class FlowObserver<D> implements Observer<FlowStates<D>> {
@@ -55,13 +58,14 @@ public class Flow<D> {
 
         private final AtomicReference<FlowStates<D>> fromState = new AtomicReference<>();
 
-        private D data;
+        private final D data;
 
         private Consumer<FlowObserver> completeHandler;
 
         private BiConsumer<FlowObserver, Exception> errorHandler;
 
-        public FlowObserver(Consumer<FlowObserver> completeHandler, BiConsumer<FlowObserver, Exception> errorHandler) {
+        public FlowObserver(D data, Consumer<FlowObserver> completeHandler, BiConsumer<FlowObserver, Exception> errorHandler) {
+            this.data = data;
             this.completeHandler = completeHandler;
             this.errorHandler = errorHandler;
         }
@@ -90,10 +94,6 @@ public class Flow<D> {
 
         public FlowStates<D> fromState() {
             return fromState.get();
-        }
-
-        public void setData(D value) {
-            this.data = value;
         }
 
         public D getData() {

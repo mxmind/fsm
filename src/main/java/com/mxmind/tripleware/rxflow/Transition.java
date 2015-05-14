@@ -25,10 +25,6 @@ public class Transition<D> {
         return fsm;
     }
 
-    public void setData(D value) {
-        fsm.setData(value);
-    }
-
     public D getData(){
         return fsm.getData();
     }
