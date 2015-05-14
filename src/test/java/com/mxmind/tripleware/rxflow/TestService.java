@@ -6,6 +6,10 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.params.ClientPNames;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.StandardHttpRequestRetryHandler;
+import org.apache.http.impl.client.SystemDefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -19,7 +23,9 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.EnumSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -108,7 +114,13 @@ public class TestService {
 
     private void receivePicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
-        final HttpGet get = new HttpGet(transition.getData().getUrl());
+
+        DefaultHttpClient client = new SystemDefaultHttpClient();
+        client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
+        client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
+        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
+
+        HttpGet get = new HttpGet(transition.getData().getUrl());
 
         try {
             client.execute(get, response -> {
@@ -156,7 +168,7 @@ public class TestService {
 
         try {
             final String pathToFile = String.format(
-                "/Users/mxmind/Development/RxPicture/src/test/resources/%s.%s",
+                "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
                 picture.getSource(),
                 ext
             );
@@ -179,7 +191,7 @@ public class TestService {
      * section: fsm states
      */
 
-    private enum States implements State<Picture> {
+    private enum States implements FlowStates<Picture> {
 
         gravatar {
             @Override
@@ -234,7 +246,8 @@ public class TestService {
         error {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) ->  transition.fsm().onNext(complete));
+                // perform recovery
+                super.onTransition(transition);
             }
         },
 

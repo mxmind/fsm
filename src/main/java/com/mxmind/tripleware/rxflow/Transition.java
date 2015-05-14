@@ -14,9 +14,9 @@ public class Transition<D> {
 
     private Flow.FlowObserver<D> fsm;
 
-    private State state;
+    private FlowStates state;
 
-    public Transition(Flow.FlowObserver<D> fsm, State state) {
+    public Transition(Flow.FlowObserver<D> fsm, FlowStates state) {
         this.fsm = fsm;
         this.state = state;
     }
@@ -33,7 +33,7 @@ public class Transition<D> {
         return fsm.getData();
     }
 
-    public Transition handle(Consumer<State> handler) {
+    public Transition handle(Consumer<FlowStates> handler) {
         handler.accept(state);
         return this;
     }

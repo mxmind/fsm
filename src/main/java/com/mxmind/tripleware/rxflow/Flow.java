@@ -18,12 +18,12 @@ import java.util.function.Consumer;
  */
 public class Flow<D> {
 
-    private State<D> initState;
+    private FlowStates<D> initState;
 
-    private final Observable<State<D>> observable;
+    private final Observable<FlowStates<D>> observable;
 
     {
-        observable = Observable.create((final Observer<State<D>> observer) -> {
+        observable = Observable.create((final Observer<FlowStates<D>> observer) -> {
             BooleanSubscription sub = new BooleanSubscription();
             try {
                 Executors.callable(() -> {
@@ -38,22 +38,22 @@ public class Flow<D> {
         });
     }
 
-    private Flow(final State<D> initState) {
+    private Flow(final FlowStates<D> initState) {
         this.initState = initState;
     }
 
-    public static <D> void initialize(State<D> initState,
+    public static <D> void initialize(FlowStates<D> initState,
                                    Consumer<FlowObserver> completeHandler,
                                    BiConsumer<FlowObserver, Exception> errorHandler) {
         Flow<D> flow = new Flow<>(initState);
         flow.observable.subscribe(new FlowObserver<>(completeHandler, errorHandler));
     }
 
-    public static class FlowObserver<D> implements Observer<State<D>> {
+    public static class FlowObserver<D> implements Observer<FlowStates<D>> {
 
-        private final AtomicReference<State<D>> toState = new AtomicReference<>();
+        private final AtomicReference<FlowStates<D>> toState = new AtomicReference<>();
 
-        private final AtomicReference<State<D>> fromState = new AtomicReference<>();
+        private final AtomicReference<FlowStates<D>> fromState = new AtomicReference<>();
 
         private D data;
 
@@ -77,7 +77,7 @@ public class Flow<D> {
         }
 
         @Override
-        public void onNext(State<D> state) {
+        public void onNext(FlowStates<D> state) {
             if (fromState.get() == null) {
                 fromState.set(state);
                 toState.set(state);
@@ -88,7 +88,7 @@ public class Flow<D> {
             toState.get().onTransition(transition);
         }
 
-        public State<D> fromState() {
+        public FlowStates<D> fromState() {
             return fromState.get();
         }
 

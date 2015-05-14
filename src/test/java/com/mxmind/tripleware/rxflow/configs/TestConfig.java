@@ -16,11 +16,6 @@ import org.springframework.context.annotation.*;
 public class TestConfig {
 
     @Bean
-    HttpClientFactoryBean httpClient(){
-        return new HttpClientFactoryBean();
-    }
-
-    @Bean
     TestService testService(){
         return new TestService();
     }
