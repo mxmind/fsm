@@ -20,7 +20,6 @@ import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -98,6 +97,7 @@ public class TestService {
     private void receivePicture(Transition<Picture> transition) {
         final Picture picture = transition.getData();
 
+        //TODO: create factory
         DefaultHttpClient client = new SystemDefaultHttpClient();
         client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
         client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
@@ -151,20 +151,19 @@ public class TestService {
 
         try {
             final String pathToFile = String.format(
-                "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
-                picture.getSource(),
-                ext
+                    "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
+                    picture.getSource(),
+                    ext
             );
-            Path path = Paths.get(pathToFile);
-            if (Files.exists(path)) Files.delete(path);
-
-            File dest = new File(path.toString());
-            if(dest.createNewFile()) {
-                ImageIO.write(picture.getImage(), ext, dest);
-
-                picture.setDownloaded(true);
-                picture.setUuid(UUID.randomUUID().toString());
+            Path dest = Paths.get(pathToFile);
+            if (Files.exists(dest)) {
+                Files.delete(dest);
             }
+            ImageIO.write(picture.getImage(), ext, Files.createFile(dest).toFile());
+
+            picture.setDownloaded(true);
+            picture.setUuid(UUID.randomUUID().toString());
+
         } catch (IOException ex) {
             transition.fsm().onError(ex);
         }
