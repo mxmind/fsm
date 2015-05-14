@@ -1,4 +1,4 @@
-package com.mxmind.tripleware.rxflow;
+package com.mxmind.tripleware.publicprofile.dtos;
 
 import java.awt.image.RenderedImage;
 
@@ -16,8 +16,6 @@ public class Picture {
     private String contentType;
 
     private String source;
-
-    private String url;
 
     private String uuid;
 
@@ -48,11 +46,7 @@ public class Picture {
     }
 
     public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
+        return null;
     }
 
     public boolean isDownloaded() {
