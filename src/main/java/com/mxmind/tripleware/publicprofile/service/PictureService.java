@@ -1,9 +1,6 @@
 package com.mxmind.tripleware.publicprofile.service;
 
-import com.mxmind.tripleware.publicprofile.dtos.FacebookPicture;
-import com.mxmind.tripleware.publicprofile.dtos.GravatarPicture;
-import com.mxmind.tripleware.publicprofile.dtos.Picture;
-import com.mxmind.tripleware.publicprofile.dtos.PictureOptions;
+import com.mxmind.tripleware.publicprofile.dtos.*;
 import com.mxmind.tripleware.publicprofile.rxflow.Flow;
 import com.mxmind.tripleware.publicprofile.rxflow.FlowStates;
 import com.mxmind.tripleware.publicprofile.rxflow.Transition;
@@ -183,6 +180,16 @@ public class PictureService {
             g.fillRect(0, 0, w, minHeight);
             g.drawImage(source, 0, y, w, h + y, 0, 0, w, h, null);
             g.dispose();
+
+            picture.setImage(image);
+        }
+    }
+
+    public void cropPicture(Picture picture) {
+        if(!picture.getCrop().isEmpty()) {
+            Crop crop = picture.getCrop();
+            BufferedImage source = (BufferedImage) picture.getImage();
+            BufferedImage image = source.getSubimage(crop.getX(), crop.getY(), crop.getWidth(), crop.getHeight());
 
             picture.setImage(image);
         }

@@ -18,7 +18,7 @@ public class Picture {
 
     private String contentType;
 
-    private String source;
+    private String source = "manual";
 
     private String uuid;
 
