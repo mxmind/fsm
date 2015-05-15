@@ -1,4 +1,4 @@
-package com.mxmind.tripleware.rxflow;
+package com.mxmind.tripleware.publicprofile.rxflow;
 
 import rx.Observable;
 import rx.Observer;

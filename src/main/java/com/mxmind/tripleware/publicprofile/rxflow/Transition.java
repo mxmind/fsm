@@ -1,7 +1,4 @@
-package com.mxmind.tripleware.rxflow;
-
-import java.util.function.Consumer;
-
+package com.mxmind.tripleware.publicprofile.rxflow;
 
 /**
  * RxPicture
@@ -29,8 +26,12 @@ public class Transition<D> {
         return fsm.getData();
     }
 
-    public Transition handle(Consumer<FlowStates> handler) {
-        handler.accept(state);
+    public Transition handle(FlowConsumer<FlowStates> handler) {
+        try {
+            handler.accept(state);
+        } catch (Exception ex) {
+            fsm.onError(ex);
+        }
         return this;
     }
 }

@@ -1,8 +1,6 @@
-package com.mxmind.tripleware.rxflow;
+package com.mxmind.tripleware.publicprofile.service;
 
-import com.mxmind.tripleware.rxflow.configs.TestConfig;
-import junit.framework.Assert;
-import org.junit.Test;
+import com.mxmind.tripleware.publicprofile.common.PictureConfiguration;
 import org.junit.runner.RunWith;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestExecutionListeners;
@@ -12,7 +10,6 @@ import org.springframework.test.context.support.DirtiesContextTestExecutionListe
 
 import javax.inject.Inject;
 
-
 /**
  * RxPicture
  *
@@ -21,25 +18,13 @@ import javax.inject.Inject;
  * @since 1.0.0
  */
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = {TestConfig.class})
+@ContextConfiguration(classes = {PictureConfiguration.class})
 @TestExecutionListeners({
         DependencyInjectionTestExecutionListener.class,
         DirtiesContextTestExecutionListener.class,
 })
-public class FlowTestCase {
+public abstract class BasePictureTestCase {
 
     @Inject
-    private TestService service;
-
-    @Test
-    public void testGravatarPictureFlow() {
-        Boolean isReceived = service.processGravatarPicture();
-        Assert.assertTrue(isReceived);
-    }
-
-    @Test
-    public void testFacebookPictureFlow() {
-        Boolean isReceived = service.processFacebookPicture();
-        Assert.assertTrue(isReceived);
-    }
+    protected PictureService service;
 }

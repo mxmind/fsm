@@ -1,10 +1,14 @@
-package com.mxmind.tripleware.rxflow;
+package com.mxmind.tripleware.publicprofile.service;
 
 import com.mxmind.tripleware.publicprofile.dtos.FacebookPicture;
 import com.mxmind.tripleware.publicprofile.dtos.GravatarPicture;
 import com.mxmind.tripleware.publicprofile.dtos.Picture;
 import com.mxmind.tripleware.publicprofile.dtos.PictureOptions;
+import com.mxmind.tripleware.publicprofile.rxflow.Flow;
+import com.mxmind.tripleware.publicprofile.rxflow.FlowStates;
+import com.mxmind.tripleware.publicprofile.rxflow.Transition;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -38,9 +42,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 1.0.0
  */
 @Service("testService")
-public class TestService {
+public class PictureService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TestService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PictureService.class);
 
     private final AtomicBoolean result = new AtomicBoolean();
 
@@ -84,77 +88,59 @@ public class TestService {
      * section: picture processing
      */
 
-    private void prepareGravatarPicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
+    private void prepareGravatarPicture(final Picture picture) {
         picture.setOptions(PictureOptions.LARGE);
     }
 
-    private void prepareFacebookPicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
+    private void prepareFacebookPicture(final Picture picture) {
         picture.setOptions(PictureOptions.LARGE);
     }
 
-    private void prepareManualPicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
+    private void prepareManualPicture(final Picture picture) {
         picture.setSource("manual");
     }
 
-    private boolean checkForPicture(Transition<Picture> transition) {
-        AtomicBoolean result = new AtomicBoolean(Boolean.FALSE);
+    protected void checkForPicture(final Picture picture) throws IOException {
 
-        if (FacebookPicture.class.isInstance(transition.getData())) {
-            return result.get();
+        if (FacebookPicture.class.isInstance(picture)) {
+            picture.setAvailable(true);
+            return;
         }
-        GravatarPicture picture = (GravatarPicture) transition.getData();
 
         HttpClient client = getDefaultHttpClient();
-        HttpGet get = new HttpGet(picture.getCheckUrl());
+        HttpGet get = new HttpGet(((GravatarPicture) picture).getCheckUrl());
 
-        try {
-            client.execute(get, response -> {
-                result.set(response.getStatusLine().getStatusCode() == HttpStatus.SC_NOT_FOUND);
-                return response;
-            });
-            client.getConnectionManager().shutdown();
-        } catch (IOException ex) {
-            transition.fsm().onError(ex);
-        }
-        return result.get();
+        client.execute(get, response -> {
+            picture.setAvailable(response.getStatusLine().getStatusCode() != HttpStatus.SC_NOT_FOUND);
+            return response;
+        });
+        client.getConnectionManager().shutdown();
     }
 
-    private void receivePicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
-
-        //TODO: create factory
+    protected void receivePicture(final Picture picture) throws IOException {
         HttpClient client = getDefaultHttpClient();
-        HttpGet get = new HttpGet(transition.getData().getUrl());
+        HttpGet get = new HttpGet(picture.getUrl());
 
-        try {
-            client.execute(get, response -> {
-                if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
-                    HttpEntity entity = response.getEntity();
+        HttpResponse response = client.execute(get);
+        if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+            HttpEntity entity = response.getEntity();
 
-                    if (entity.isStreaming()) {
-                        picture.setContentType(entity.getContentType().getValue());
-                        BufferedImage source = ImageIO.read(entity.getContent());
-                        picture.setImage(source);
-                    }
-                }
+            if (entity.isStreaming()) {
+                BufferedImage source = ImageIO.read(entity.getContent());
 
-                return response;
-            });
-            client.getConnectionManager().shutdown();
-        } catch (IOException ex) {
-            transition.fsm().onError(ex);
+                picture.setContentType(entity.getContentType().getValue());
+                picture.setImage(source);
+                picture.setDownloaded(true);
+            }
         }
+        client.getConnectionManager().shutdown();
     }
 
-    private void processExternalPicture(Transition<Picture> transition) {
+    protected void processExternalPicture(final Picture picture) {
 
     }
 
-    private void processPicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
+    protected void processPicture(final Picture picture) {
 
         BufferedImage source = (BufferedImage) picture.getImage();
         int w = source.getWidth(), h = source.getHeight();
@@ -174,31 +160,21 @@ public class TestService {
         }
     }
 
-    private void savePicture(Transition<Picture> transition) {
-        final Picture picture = transition.getData();
+    protected void savePicture(final Picture picture) throws IOException {
+        String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
+        String pathToFile = String.format("%s/src/test/resources/%s.%s", System.getProperty("user.dir"), picture.getSource(), ext);
 
-        try {
-            String ext = picture.getContentType().equalsIgnoreCase("image/png") ? "png" : "jpg";
-            String pathToFile = String.format(
-                    "/Users/vzdomish/Development/RxPicture/src/test/resources/%s.%s",
-                    picture.getSource(),
-                    ext
-            );
-            Path dest = Paths.get(pathToFile);
-            if (Files.exists(dest)) {
-                Files.delete(dest);
-            }
-            ImageIO.write(picture.getImage(), ext, Files.createFile(dest).toFile());
-
-            picture.setDownloaded(true);
-            picture.setUuid(UUID.randomUUID().toString());
-
-        } catch (IOException ex) {
-            transition.fsm().onError(ex);
+        Path dest = Paths.get(pathToFile);
+        if (Files.exists(dest)) {
+            Files.delete(dest);
         }
+        ImageIO.write(picture.getImage(), ext, Files.createFile(dest).toFile());
+
+        picture.setDownloaded(true);
+        picture.setUuid(UUID.randomUUID().toString());
     }
 
-    private HttpClient getDefaultHttpClient() {
+    protected HttpClient getDefaultHttpClient() {
         DefaultHttpClient client = new SystemDefaultHttpClient();
         client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
         client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
@@ -217,7 +193,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.prepareGravatarPicture(transition);
+                    service.prepareGravatarPicture(transition.getData());
                     transition.fsm().onNext(receive_picture);
                 });
             }
@@ -227,7 +203,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.prepareFacebookPicture(transition);
+                    service.prepareFacebookPicture(transition.getData());
                     transition.fsm().onNext(receive_picture);
                 });
             }
@@ -237,7 +213,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.prepareManualPicture(transition);
+                    service.prepareManualPicture(transition.getData());
                     transition.fsm().onNext(receive_picture);
                 });
             }
@@ -247,7 +223,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.receivePicture(transition);
+                    service.receivePicture(transition.getData());
                     transition.fsm().onNext(process_picture);
                 });
             }
@@ -257,7 +233,7 @@ public class TestService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.processPicture(transition);
+                    service.processPicture(transition.getData());
                     transition.fsm().onNext(complete);
                 });
             }
@@ -276,7 +252,7 @@ public class TestService {
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
                     if (state.equals(process_picture)) {
-                        service.savePicture(transition);
+                        service.savePicture(transition.getData());
                     }
                 });
 
@@ -284,22 +260,22 @@ public class TestService {
             }
         };
 
+        protected PictureService service;
+
+        public void setService(PictureService service) {
+            this.service = service;
+        }
+
         @Component
         public static class Injector {
 
             @Inject
-            private TestService service;
+            private PictureService service;
 
             @PostConstruct
             public void postConstruct() {
                 EnumSet.allOf(States.class).forEach(state -> state.setService(service));
             }
-        }
-
-        protected TestService service;
-
-        public void setService(TestService service) {
-            this.service = service;
         }
     }
 }

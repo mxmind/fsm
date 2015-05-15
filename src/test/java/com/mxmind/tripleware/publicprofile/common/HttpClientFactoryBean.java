@@ -1,4 +1,4 @@
-package com.mxmind.tripleware.rxflow.configs;
+package com.mxmind.tripleware.publicprofile.common;
 
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
