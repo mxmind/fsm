@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.URISyntaxException;
-import java.nio.file.Paths;
 
 import static junit.framework.Assert.*;
 import static org.mockito.Mockito.*;
@@ -51,7 +50,7 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
         spyService = PowerMockito.spy(service);
 
         picture = new FacebookPicture("100003234733056");
-        pictureFile = Paths.get(this.getClass().getResource("/facebook_test.jpg").toURI()).toFile();
+        pictureFile = getImageFile("/facebook_test.jpg");
     }
 
     @Test

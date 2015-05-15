@@ -9,6 +9,9 @@ import org.springframework.test.context.support.DependencyInjectionTestExecution
 import org.springframework.test.context.support.DirtiesContextTestExecutionListener;
 
 import javax.inject.Inject;
+import java.io.File;
+import java.net.URISyntaxException;
+import java.nio.file.Paths;
 
 /**
  * RxPicture
@@ -27,4 +30,8 @@ public abstract class BasePictureTestCase {
 
     @Inject
     protected PictureService service;
+
+    protected File getImageFile(String pathToImage) throws URISyntaxException {
+        return Paths.get(this.getClass().getResource(pathToImage).toURI()).toFile();
+    }
 }

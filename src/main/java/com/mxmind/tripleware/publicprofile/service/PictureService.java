@@ -46,6 +46,10 @@ public class PictureService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PictureService.class);
 
+    public static final int MAX_HEIGHT = 600;
+
+    public static final int MAX_WIDTH = 910;
+
     private final AtomicBoolean result = new AtomicBoolean();
 
     public Boolean processGravatarPicture() {
@@ -140,8 +144,31 @@ public class PictureService {
 
     }
 
-    protected void processPicture(final Picture picture) {
+    protected void resizePicture(final Picture picture) {
+        BufferedImage source = (BufferedImage) picture.getImage();
+        int w = source.getWidth(), h = source.getHeight();
 
+        if (h > MAX_HEIGHT || w > MAX_WIDTH) {
+            float scaleFactor = w > h ? (float) w / MAX_WIDTH : (float) h / MAX_HEIGHT;
+            int sw = (int) (w / scaleFactor);
+            int sh = (int) (h / scaleFactor);
+
+            BufferedImage resizedImage = new BufferedImage(sw, sh, source.getType());
+
+            Graphics2D g = resizedImage.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING,     RenderingHints.VALUE_RENDER_QUALITY);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,  RenderingHints.VALUE_ANTIALIAS_ON);
+
+            g.drawImage(source, 0, 0, sw, sh, null);
+
+            g.dispose();
+
+            picture.setImage(resizedImage);
+        }
+    }
+
+    protected void extendPicture(final Picture picture) {
         BufferedImage source = (BufferedImage) picture.getImage();
         int w = source.getWidth(), h = source.getHeight();
         int minHeight = picture.getOptions().getMinHeight();
@@ -150,6 +177,7 @@ public class PictureService {
             int y = (minHeight - h) >> 1;
             BufferedImage image = new BufferedImage(w, minHeight, source.getType());
 
+            // no render hints, just copy pixels from original image;
             Graphics2D g = image.createGraphics();
             g.setColor(Color.WHITE);
             g.fillRect(0, 0, w, minHeight);
@@ -170,7 +198,7 @@ public class PictureService {
         }
         ImageIO.write(picture.getImage(), ext, Files.createFile(dest).toFile());
 
-        picture.setDownloaded(true);
+        picture.setSaved(true);
         picture.setUuid(UUID.randomUUID().toString());
     }
 
@@ -233,7 +261,7 @@ public class PictureService {
             @Override
             public void onTransition(Transition<Picture> transition) {
                 transition.handle((state) -> {
-                    service.processPicture(transition.getData());
+                    service.extendPicture(transition.getData());
                     transition.fsm().onNext(complete);
                 });
             }

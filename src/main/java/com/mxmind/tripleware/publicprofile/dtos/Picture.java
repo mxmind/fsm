@@ -26,6 +26,8 @@ public class Picture {
 
     private boolean downloaded;
 
+    private boolean saved;
+
     private Crop crop;
 
     private PictureOptions options;
@@ -87,8 +89,8 @@ public class Picture {
     /**
      * Gets url.
      *
-     * @apiNote Should be overrided into sub-classes
      * @return the url
+     * @apiNote Should be overrided into sub-classes
      */
     public String getUrl() {
         return null;
@@ -128,6 +130,25 @@ public class Picture {
      */
     public void setDownloaded(boolean value) {
         this.downloaded = value;
+    }
+
+
+    /**
+     * Is saved.
+     *
+     * @return the boolean
+     */
+    public boolean isSaved() {
+        return saved;
+    }
+
+    /**
+     * Sets saved.
+     *
+     * @param value the value
+     */
+    public void setSaved(boolean value) {
+        this.saved = value;
     }
 
     /**
@@ -198,6 +219,7 @@ public class Picture {
         return new EqualsBuilder()
                 .append(available, that.available)
                 .append(downloaded, that.downloaded)
+                .append(saved, that.saved)
                 .append(image, that.image)
                 .append(contentType, that.contentType)
                 .append(source, that.source)
@@ -216,6 +238,7 @@ public class Picture {
                 .append(uuid)
                 .append(available)
                 .append(downloaded)
+                .append(saved)
                 .append(crop)
                 .append(options)
                 .toHashCode();
