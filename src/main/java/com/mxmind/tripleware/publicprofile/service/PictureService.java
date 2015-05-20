@@ -216,7 +216,7 @@ public class PictureService {
         DefaultHttpClient client = new SystemDefaultHttpClient();
         client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(3, true));
         client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
-        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
+        client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, true);
 
         return client;
     }
