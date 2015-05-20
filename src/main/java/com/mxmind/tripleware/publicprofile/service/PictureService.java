@@ -3,6 +3,7 @@ package com.mxmind.tripleware.publicprofile.service;
 import com.mxmind.tripleware.publicprofile.dtos.*;
 import com.mxmind.tripleware.publicprofile.rxflow.Flow;
 import com.mxmind.tripleware.publicprofile.rxflow.FlowStates;
+import com.mxmind.tripleware.publicprofile.rxflow.Matcher;
 import com.mxmind.tripleware.publicprofile.rxflow.Transition;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -71,18 +72,21 @@ public class PictureService {
     }
 
     /*
-     * section: fsm handlers
+     * section: transition handlers
      */
 
-    private void onComplete(Flow.FlowObserver<Picture> fsm) {
-        result.set(fsm.getData().isDownloaded());
+    private void onComplete(Transition<Picture> transition) {
+        result.set(transition.getData().isDownloaded());
     }
 
-    private void onError(Flow.FlowObserver<Picture> fsm, Exception ex) {
-        if (LOG.isErrorEnabled()) {
-            LOG.error(String.format("Exception occurred on state: %s", fsm.fromState()), ex);
-        }
-        fsm.onNext(States.error);
+    private void onError(Transition<Picture> transition, Exception ex) {
+
+        Matcher<Exception, Picture> matcher = Matcher.when(NullPointerException.class::isInstance, cause -> {
+            LOG.error(String.format("Exception occurred on state: %s", transition.fromState()), cause);
+            return transition.getData();
+        });
+
+        matcher.match(ex).ifPresent(value -> transition.onNext(States.error));
     }
 
     /*
@@ -138,7 +142,6 @@ public class PictureService {
     }
 
     protected void processExternalPicture(final Picture picture) {
-
     }
 
     protected void resizePicture(final Picture picture) {
@@ -211,7 +214,7 @@ public class PictureService {
 
     protected HttpClient getDefaultHttpClient() {
         DefaultHttpClient client = new SystemDefaultHttpClient();
-        client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(2, true));
+        client.setHttpRequestRetryHandler(new StandardHttpRequestRetryHandler(3, true));
         client.getParams().setIntParameter(ClientPNames.MAX_REDIRECTS, 10);
         client.getParams().setBooleanParameter(ClientPNames.ALLOW_CIRCULAR_REDIRECTS, false);
 
@@ -219,7 +222,7 @@ public class PictureService {
     }
 
     /*
-     * section: fsm states
+     * section: transition states
      */
 
     private enum States implements FlowStates<Picture> {
@@ -227,71 +230,75 @@ public class PictureService {
         gravatar {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
-                    service.prepareGravatarPicture(transition.getData());
-                    transition.fsm().onNext(receive_picture);
-                });
+                service.prepareGravatarPicture(transition.getData());
+                transition.onNext(receive_picture);
             }
         },
 
         facebook {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
-                    service.prepareFacebookPicture(transition.getData());
-                    transition.fsm().onNext(receive_picture);
-                });
+                service.prepareFacebookPicture(transition.getData());
+                transition.onNext(receive_picture);
             }
         },
 
         manual {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
-                    service.prepareManualPicture(transition.getData());
-                    transition.fsm().onNext(receive_picture);
-                });
+                service.prepareManualPicture(transition.getData());
+                transition.onNext(receive_picture);
             }
         },
 
         receive_picture {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
+                try {
                     service.receivePicture(transition.getData());
-                    transition.fsm().onNext(process_picture);
-                });
+                } catch (IOException ex) {
+                    transition.onError(ex);
+                }
+                transition.onNext(process_picture);
             }
         },
 
         process_picture {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
-                    service.extendPicture(transition.getData());
-                    transition.fsm().onNext(complete);
-                });
+                service.extendPicture(transition.getData());
+                transition.onNext(complete);
             }
         },
 
         error {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                // perform recovery
-                super.onTransition(transition);
+                 transition.onCompleted();
             }
         },
 
         complete {
             @Override
             public void onTransition(Transition<Picture> transition) {
-                transition.handle((state) -> {
-                    if (state.equals(process_picture)) {
-                        service.savePicture(transition.getData());
-                    }
-                });
+                final Picture data = transition.getData();
 
-                super.onTransition(transition);
+                Matcher<Object, Picture> matcher = Matcher.when(process_picture::equals, state -> {
+                    try {
+                        service.savePicture(data);
+                    } catch (IOException ex) {
+                        transition.onError(ex);
+                    }
+                    return data;
+                }).orWhen(error::equals, state -> {
+                    // do something useful;
+                    return data;
+                }).otherwise(state -> transition.getData());
+
+                matcher.match(transition.fromState()).ifPresent(picture -> {
+                    // do something useful;
+                    transition.onCompleted();
+                });
             }
         };
 

@@ -54,6 +54,11 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
     }
 
     @Test
+    public void testFlow(){
+        service.processFacebookPicture();
+    }
+
+    @Test
     public void testRecivePictureWithOkStatus() throws Exception {
 
         HttpClient httpClient = mock(HttpClient.class);

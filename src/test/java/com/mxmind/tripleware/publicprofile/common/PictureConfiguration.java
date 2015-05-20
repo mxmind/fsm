@@ -12,7 +12,7 @@ import org.springframework.context.annotation.*;
  */
 
 @Configuration
-@ComponentScan("com.mxmind.tripleware.publicprofile.rxflow")
+@ComponentScan("com.mxmind.tripleware.publicprofile.service")
 public class PictureConfiguration {
 
     @Bean

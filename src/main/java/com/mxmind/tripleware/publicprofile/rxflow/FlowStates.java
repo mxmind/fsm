@@ -9,7 +9,7 @@ package com.mxmind.tripleware.publicprofile.rxflow;
  */
 public interface FlowStates<D> {
 
-    default void onTransition(Transition<D> transition){
-        transition.fsm().onCompleted();
+    default void onTransition(Transition<D> observer) {
+         observer.onCompleted();
     }
 }

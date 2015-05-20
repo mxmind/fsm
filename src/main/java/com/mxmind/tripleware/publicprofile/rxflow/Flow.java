@@ -5,7 +5,6 @@ import rx.Observer;
 import rx.subscriptions.BooleanSubscription;
 
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -44,60 +43,9 @@ public class Flow<D> {
 
     public static <D> void initialize(FlowStates<D> initState,
                                       D data,
-                                      Consumer<FlowObserver> completeHandler,
-                                      BiConsumer<FlowObserver, Exception> errorHandler) {
+                                      Consumer<Transition> completeHandler,
+                                      BiConsumer<Transition, Exception> errorHandler) {
         Flow<D> flow = new Flow<>(initState);
-        FlowObserver<Object> observer = new FlowObserver<>(data, completeHandler, errorHandler);
-
-        flow.observable.subscribe(observer);
-    }
-
-    public static class FlowObserver<D> implements Observer<FlowStates<D>> {
-
-        private final AtomicReference<FlowStates<D>> toState = new AtomicReference<>();
-
-        private final AtomicReference<FlowStates<D>> fromState = new AtomicReference<>();
-
-        private final D data;
-
-        private Consumer<FlowObserver> completeHandler;
-
-        private BiConsumer<FlowObserver, Exception> errorHandler;
-
-        public FlowObserver(D data, Consumer<FlowObserver> completeHandler, BiConsumer<FlowObserver, Exception> errorHandler) {
-            this.data = data;
-            this.completeHandler = completeHandler;
-            this.errorHandler = errorHandler;
-        }
-
-        @Override
-        public void onCompleted() {
-            completeHandler.accept(this);
-        }
-
-        @Override
-        public void onError(Exception ex) {
-            errorHandler.accept(this, ex);
-        }
-
-        @Override
-        public void onNext(FlowStates<D> state) {
-            if (fromState.get() == null) {
-                fromState.set(state);
-                toState.set(state);
-            } else {
-                fromState.set(toState.getAndSet(state));
-            }
-            final Transition<D> transition = new Transition<>(this, fromState.get());
-            toState.get().onTransition(transition);
-        }
-
-        public FlowStates<D> fromState() {
-            return fromState.get();
-        }
-
-        public D getData() {
-            return data;
-        }
+        flow.observable.subscribe(new Transition<>(data, completeHandler, errorHandler));
     }
 }

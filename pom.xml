@@ -255,5 +255,4 @@
             <url>http://maven.springframework.org/release/</url>
         </repository>
     </repositories>
-
 </project>
