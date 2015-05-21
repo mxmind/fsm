@@ -30,7 +30,7 @@ public class TestServer {
      * on hosts that map "localhost" to an IPv6 address or something else.
      * The port is 0 to let the system pick one.
      */
-    public final static InetSocketAddress TEST_SERVER_ADDR = new InetSocketAddress("127.0.0.1", 0);
+    public final static InetSocketAddress SERVER_ADDR = new InetSocketAddress("127.0.0.1", 0);
 
     /**
      * The request handler registry.
@@ -161,7 +161,7 @@ public class TestServer {
         }
 
         socket.setReuseAddress(true);
-        socket.bind(TEST_SERVER_ADDR);
+        socket.bind(SERVER_ADDR);
         servicedSocket = socket;
 
         listenerThread = new Thread(new RequestListener());

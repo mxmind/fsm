@@ -2,10 +2,8 @@ package com.mxmind.tripleware.publicprofile.service;
 
 import com.mxmind.tripleware.publicprofile.dtos.FacebookPicture;
 import com.mxmind.tripleware.publicprofile.dtos.Picture;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.ProtocolVersion;
+
+import org.apache.http.*;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.RedirectException;
 import org.apache.http.client.methods.HttpGet;
@@ -15,15 +13,19 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.protocol.HttpRequestHandler;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.mockito.InjectMocks;
+
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +71,7 @@ public class ReceivePictureTestCase {
     public void setupTestMethod() throws Exception {
         server = new TestServer();
         server.start();
-        httpHost = new HttpHost(TestServer.TEST_SERVER_ADDR.getHostName(), server.getServicePort(), HttpHost.DEFAULT_SCHEME_NAME);
+        httpHost = new HttpHost(TestServer.SERVER_ADDR.getHostName(), server.getServicePort(), HttpHost.DEFAULT_SCHEME_NAME);
 
         picture = new FacebookPicture("100003234733056");
         pictureFile = getImageFile("/facebook_test.jpg");
@@ -89,7 +91,7 @@ public class ReceivePictureTestCase {
     public void testRecivePictureWithOkStatus() throws Exception {
         HttpGet get = new HttpGet(picture.getUrl());
 
-        new TestServerMockRegistrar(get).register((request, response, context) -> {
+        new TestServerRegistrar(get).mock().register((request, response, context) -> {
             ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             String uri = request.getRequestLine().getUri();
 
@@ -114,7 +116,7 @@ public class ReceivePictureTestCase {
     public void testRecivePictureWithNotFoundStatus() throws Exception {
         HttpGet get = new HttpGet(picture.getUrl());
 
-        new TestServerMockRegistrar(get).register((request, response, context) -> {
+        new TestServerRegistrar(get).mock().register((request, response, context) -> {
             ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             String uri = request.getRequestLine().getUri();
 
@@ -134,7 +136,7 @@ public class ReceivePictureTestCase {
     public void testRecivePictureWithInternalServerErrorStatus() throws Exception {
         HttpGet get = new HttpGet(picture.getUrl());
 
-        new TestServerMockRegistrar(get).register((request, response, context) -> {
+        new TestServerRegistrar(get).mock().register((request, response, context) -> {
             ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             String uri = request.getRequestLine().getUri();
 
@@ -159,18 +161,16 @@ public class ReceivePictureTestCase {
         HttpGet get = new HttpGet("/circular-0/");
         CountDownLatch latch = new CountDownLatch(10);
 
-        new TestServerMockRegistrar(get).register("*", (request, response, context) -> {
+        new TestServerRegistrar(get).register((request, response, context) -> {
             ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             String uri = request.getRequestLine().getUri();
 
-            if (uri.startsWith("/circular-1")) {
-                prepareResponse(ver, response, 2);
-                latch.countDown();
-            } else if (uri.startsWith("/circular-2")) {
-                prepareResponse(ver, response, 1);
-                latch.countDown();
+            if (uri.startsWith("/circular-0")) {
+                moveTemporarily(ver, response, 1);
             } else {
-                prepareResponse(ver, response, 1);
+                int incr = uri.startsWith("/circular-1") ? 2 : 1;
+                moveTemporarily(ver, response, incr);
+                latch.countDown();
             }
         });
 
@@ -182,16 +182,16 @@ public class ReceivePictureTestCase {
         }
     }
 
-    private void prepareResponse(ProtocolVersion ver, HttpResponse response, int locIncrement){
+    private void moveTemporarily(ProtocolVersion ver, HttpResponse response, int index){
         response.setStatusLine(ver, HttpStatus.SC_MOVED_TEMPORARILY);
-        response.addHeader(new BasicHeader("Location", String.format("/circular-location-%d", locIncrement)));
+        response.addHeader(new BasicHeader("Location", String.format("/circular-location-%d", index)));
     }
 
-    protected File getImageFile(String pathToImage) throws URISyntaxException {
+    private File getImageFile(String pathToImage) throws URISyntaxException {
         return Paths.get(this.getClass().getResource(pathToImage).toURI()).toFile();
     }
 
-    private class TestServerMockRegistrar {
+    private class TestServerRegistrar {
 
         private HttpRequestBase request;
 
@@ -199,23 +199,24 @@ public class ReceivePictureTestCase {
 
         private String pattern = "*";
 
-        public TestServerMockRegistrar(HttpRequestBase request) {
+        public TestServerRegistrar(HttpRequestBase request) {
             this.request = request;
         }
 
-        public void register(HttpRequestHandler handler) throws Exception {
+        public TestServerRegistrar mock() throws Exception {
             URI uri = request.getURI();
+
             PowerMockito.mockStatic(URIUtils.class, withSettings()
-                .name(methodName)
-                .defaultAnswer(invocation -> invocation.getMethod().getName().equals(methodName) ? httpHost : uri)
+                            .name(methodName)
+                            .defaultAnswer(invocation -> invocation.getMethod().getName().equals(methodName) ? httpHost : uri)
             );
             PowerMockito.when(URIUtils.class, methodName, uri).thenReturn(httpHost);
-
-            server.register(pattern, handler);
+            return this;
         }
 
-        public void register(String pattern, HttpRequestHandler handler) throws Exception {
+        public TestServerRegistrar register(HttpRequestHandler handler) throws Exception {
             server.register(pattern, handler);
+            return this;
         }
     }
 }
