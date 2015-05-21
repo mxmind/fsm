@@ -2,28 +2,24 @@ package com.mxmind.tripleware.publicprofile.service;
 
 import com.mxmind.tripleware.publicprofile.dtos.FacebookPicture;
 import com.mxmind.tripleware.publicprofile.dtos.Picture;
-import org.apache.http.*;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.ProtocolVersion;
 import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.RedirectException;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.utils.URIUtils;
 import org.apache.http.entity.ContentType;
-import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.conn.BasicClientConnectionManager;
 import org.apache.http.message.BasicHeader;
-import org.apache.http.message.BasicHttpResponse;
-import org.apache.http.message.BasicStatusLine;
 import org.apache.http.protocol.HttpRequestHandler;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
-import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -31,14 +27,16 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.util.concurrent.CountDownLatch;
 
 import static junit.framework.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.withSettings;
 
 /**
  * RxPicture
@@ -59,9 +57,7 @@ public class ReceivePictureTestCase {
 
     private final static ContentType CONTENT_TYPE = ContentType.create("image/jpeg");
 
-    private PictureService spyService;
-
-    private TestServer testServer;
+    private TestServer server;
 
     private Picture picture;
 
@@ -71,12 +67,9 @@ public class ReceivePictureTestCase {
 
     @Before
     public void setupTestMethod() throws Exception {
-
-        spyService = PowerMockito.spy(service);
-        testServer = new TestServer();
-        testServer.start();
-
-        httpHost = new HttpHost(TestServer.TEST_SERVER_ADDR.getHostName(), testServer.getServicePort(), "http");
+        server = new TestServer();
+        server.start();
+        httpHost = new HttpHost(TestServer.TEST_SERVER_ADDR.getHostName(), server.getServicePort(), HttpHost.DEFAULT_SCHEME_NAME);
 
         picture = new FacebookPicture("100003234733056");
         pictureFile = getImageFile("/facebook_test.jpg");
@@ -84,7 +77,7 @@ public class ReceivePictureTestCase {
 
     @After
     public void tearDown() throws Exception {
-        testServer.stop();
+        server.stop();
     }
 
     @Test
@@ -94,31 +87,44 @@ public class ReceivePictureTestCase {
 
     @Test
     public void testRecivePictureWithOkStatus() throws Exception {
+        HttpGet get = new HttpGet(picture.getUrl());
 
-        HttpClient httpClient = mock(HttpClient.class);
-        when(httpClient.getConnectionManager()).thenReturn(new BasicClientConnectionManager());
-        PowerMockito.when(spyService.getDefaultHttpClient()).thenReturn(httpClient);
-        when(httpClient.execute(any(HttpGet.class))).thenReturn(mockResponse(200, pictureFile, ""));
+        new TestServerMockRegistrar(get).register((request, response, context) -> {
+            ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
+            String uri = request.getRequestLine().getUri();
 
-        spyService.receivePicture(picture);
+            if (uri.contains(get.getURI().getPath())) {
+                InputStream stream = new FileInputStream(pictureFile);
+                InputStreamEntity entity = new InputStreamEntity(stream, pictureFile.length(), CONTENT_TYPE);
+
+                response.setEntity(entity);
+                response.setStatusLine(ver, HttpStatus.SC_OK);
+            }
+        });
+
+        service.receivePicture(picture);
 
         assertNotNull(picture.getImage());
         assertTrue(picture.isDownloaded());
         assertEquals(200, picture.getImage().getWidth());
         assertEquals(150, picture.getImage().getHeight());
-
-        Mockito.reset(httpClient);
     }
 
     @Test
     public void testRecivePictureWithNotFoundStatus() throws Exception {
+        HttpGet get = new HttpGet(picture.getUrl());
 
-        HttpClient httpClient = mock(HttpClient.class);
-        when(httpClient.getConnectionManager()).thenReturn(new BasicClientConnectionManager());
-        PowerMockito.when(spyService.getDefaultHttpClient()).thenReturn(httpClient);
-        when(httpClient.execute(any(HttpGet.class))).thenReturn(mockResponse(404, pictureFile, "Not Found"));
+        new TestServerMockRegistrar(get).register((request, response, context) -> {
+            ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
+            String uri = request.getRequestLine().getUri();
 
-        spyService.receivePicture(picture);
+            if (uri.contains(get.getURI().getPath())) {
+                response.setStatusLine(ver, HttpStatus.SC_NOT_FOUND);
+                response.setReasonPhrase("Not Found");
+            }
+        });
+
+        service.receivePicture(picture);
 
         assertNull(picture.getImage());
         assertFalse(picture.isDownloaded());
@@ -169,62 +175,16 @@ public class ReceivePictureTestCase {
         });
 
         try {
-            service.getDefaultHttpClient().execute(serverHttp(), get);
+            service.getDefaultHttpClient().execute(httpHost, get);
         } catch (ClientProtocolException ex) {
             assertTrue(RedirectException.class.isInstance(ex.getCause()));
             assertEquals(latch.getCount(), 0);
         }
     }
 
-    private HttpHost serverHttp() {
-        return httpHost;
-    }
-
     private void prepareResponse(ProtocolVersion ver, HttpResponse response, int locIncrement){
         response.setStatusLine(ver, HttpStatus.SC_MOVED_TEMPORARILY);
         response.addHeader(new BasicHeader("Location", String.format("/circular-location-%d", locIncrement)));
-    }
-
-    private BasicHttpResponse prepareResponse(int responseStatus, String reason) {
-        return new BasicHttpResponse(new BasicStatusLine(HttpVersion.HTTP_1_1, responseStatus, reason));
-    }
-
-    private HttpResponse mockResponse(int responseStatus, File file, String reason) {
-        HttpResponse response = prepareResponse(responseStatus, reason);
-        response.setStatusCode(responseStatus);
-
-        try {
-            InputStream stream = new FileInputStream(file);
-            InputStreamEntity entity = new InputStreamEntity(stream, file.length(), CONTENT_TYPE);
-
-            response.setEntity(entity);
-        } catch (FileNotFoundException ex) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Cannot find test resource", ex);
-            }
-        }
-        return response;
-    }
-
-    private HttpResponse mockResponse(int responseStatus, File file, ContentType contentType, String reason) {
-        HttpResponse response = prepareResponse(responseStatus, reason);
-        response.setStatusCode(responseStatus);
-        response.setEntity(new FileEntity(file, contentType));
-        return response;
-    }
-
-    private HttpResponse mockResponse(int responseStatus, String responseBody, String reason) {
-        HttpResponse response = prepareResponse(responseStatus, reason);
-
-        try {
-            response.setStatusCode(responseStatus);
-            response.setEntity(new StringEntity(responseBody));
-        } catch (UnsupportedEncodingException ex) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Cannot create response entity", ex);
-            }
-        }
-        return response;
     }
 
     protected File getImageFile(String pathToImage) throws URISyntaxException {
@@ -247,15 +207,15 @@ public class ReceivePictureTestCase {
             URI uri = request.getURI();
             PowerMockito.mockStatic(URIUtils.class, withSettings()
                 .name(methodName)
-                .defaultAnswer(invocation -> invocation.getMethod().getName().equals(methodName) ? serverHttp() : uri)
+                .defaultAnswer(invocation -> invocation.getMethod().getName().equals(methodName) ? httpHost : uri)
             );
-            PowerMockito.when(URIUtils.class, methodName, uri).thenReturn(serverHttp());
+            PowerMockito.when(URIUtils.class, methodName, uri).thenReturn(httpHost);
 
-            testServer.register(pattern, handler);
+            server.register(pattern, handler);
         }
 
         public void register(String pattern, HttpRequestHandler handler) throws Exception {
-            testServer.register(pattern, handler);
+            server.register(pattern, handler);
         }
     }
 }
