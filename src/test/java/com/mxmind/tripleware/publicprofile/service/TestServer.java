@@ -123,11 +123,6 @@ public class TestServer {
         return connections.get();
     }
 
-    public void registerDefaultHandlers() {
-        //handlerRegistry.register("/echo/*", new EchoHandler());
-        //handlerRegistry.register("/random/*", new RandomHandler());
-    }
-
     /**
      * Registers a handler with the local registry.
      *

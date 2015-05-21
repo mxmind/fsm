@@ -7,6 +7,8 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.RedirectException;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.client.utils.URIUtils;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.InputStreamEntity;
@@ -15,15 +17,25 @@ import org.apache.http.impl.conn.BasicClientConnectionManager;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicHttpResponse;
 import org.apache.http.message.BasicStatusLine;
+import org.apache.http.protocol.HttpRequestHandler;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mockito;
 import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.Paths;
+import java.util.concurrent.CountDownLatch;
 
 import static junit.framework.Assert.*;
 import static org.mockito.Mockito.*;
@@ -35,7 +47,13 @@ import static org.mockito.Mockito.*;
  * @version 1.0.0
  * @since 1.0.0
  */
-public class ReceivePictureTestCase extends BasePictureTestCase {
+@RunWith(PowerMockRunner.class)
+@PrepareForTest(URIUtils.class)
+@PowerMockIgnore("javax.net.ssl.*")
+public class ReceivePictureTestCase {
+
+    @InjectMocks
+    private PictureService service = new PictureService();
 
     private final static Logger LOG = LoggerFactory.getLogger(ReceivePictureTestCase.class);
 
@@ -49,12 +67,16 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
 
     private File pictureFile;
 
+    private HttpHost httpHost;
+
     @Before
     public void setupTestMethod() throws Exception {
 
         spyService = PowerMockito.spy(service);
         testServer = new TestServer();
         testServer.start();
+
+        httpHost = new HttpHost(TestServer.TEST_SERVER_ADDR.getHostName(), testServer.getServicePort(), "http");
 
         picture = new FacebookPicture("100003234733056");
         pictureFile = getImageFile("/facebook_test.jpg");
@@ -66,7 +88,7 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
     }
 
     @Test
-    public void testFlow(){
+    public void testFlow() {
         service.processFacebookPicture();
     }
 
@@ -104,12 +126,23 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
 
     @Test
     public void testRecivePictureWithInternalServerErrorStatus() throws Exception {
-        HttpClient httpClient = mock(HttpClient.class);
-        when(httpClient.getConnectionManager()).thenReturn(new BasicClientConnectionManager());
-        PowerMockito.when(spyService.getDefaultHttpClient()).thenReturn(httpClient);
-        when(httpClient.execute(any(HttpGet.class))).thenReturn(mockResponse(500, pictureFile, "Internal Server Error"));
+        HttpGet get = new HttpGet(picture.getUrl());
 
-        spyService.receivePicture(picture);
+        new TestServerMockRegistrar(get).register((request, response, context) -> {
+            ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
+            String uri = request.getRequestLine().getUri();
+
+            if (uri.contains(get.getURI().getPath())) {
+                InputStream stream = new FileInputStream(pictureFile);
+                InputStreamEntity entity = new InputStreamEntity(stream, pictureFile.length(), CONTENT_TYPE);
+
+                response.setEntity(entity);
+                response.setStatusLine(ver, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+                response.setReasonPhrase("Internal Server Error");
+            }
+        });
+
+        service.receivePicture(picture);
 
         assertNull(picture.getImage());
         assertFalse(picture.isDownloaded());
@@ -117,30 +150,39 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
 
     @Test
     public void testCircularRedirect() throws Exception {
-        testServer.register("*", (request, response, context) -> {
+        HttpGet get = new HttpGet("/circular-0/");
+        CountDownLatch latch = new CountDownLatch(10);
+
+        new TestServerMockRegistrar(get).register("*", (request, response, context) -> {
             ProtocolVersion ver = request.getRequestLine().getProtocolVersion();
             String uri = request.getRequestLine().getUri();
 
-            if (uri.startsWith("/circular-location-1")) {
-                response.setStatusLine(ver, HttpStatus.SC_MOVED_TEMPORARILY);
-                response.addHeader(new BasicHeader("Location", "/circular-location-2"));
-            }
-            if (uri.startsWith("/circular-location-2")) {
-                response.setStatusLine(ver, HttpStatus.SC_MOVED_TEMPORARILY);
-                response.addHeader(new BasicHeader("Location", "/circular-location-1"));
+            if (uri.startsWith("/circular-1")) {
+                prepareResponse(ver, response, 2);
+                latch.countDown();
+            } else if (uri.startsWith("/circular-2")) {
+                prepareResponse(ver, response, 1);
+                latch.countDown();
+            } else {
+                prepareResponse(ver, response, 1);
             }
         });
 
         try {
-            service.getDefaultHttpClient().execute(serverHttp(), new HttpGet("/circular-location-1/"));
+            service.getDefaultHttpClient().execute(serverHttp(), get);
         } catch (ClientProtocolException ex) {
             assertTrue(RedirectException.class.isInstance(ex.getCause()));
-            assertEquals("Maximum redirects (10) exceeded", ex.getCause().getMessage());
+            assertEquals(latch.getCount(), 0);
         }
     }
 
     private HttpHost serverHttp() {
-        return new HttpHost(TestServer.TEST_SERVER_ADDR.getHostName(), testServer.getServicePort(), "http");
+        return httpHost;
+    }
+
+    private void prepareResponse(ProtocolVersion ver, HttpResponse response, int locIncrement){
+        response.setStatusLine(ver, HttpStatus.SC_MOVED_TEMPORARILY);
+        response.addHeader(new BasicHeader("Location", String.format("/circular-location-%d", locIncrement)));
     }
 
     private BasicHttpResponse prepareResponse(int responseStatus, String reason) {
@@ -183,5 +225,37 @@ public class ReceivePictureTestCase extends BasePictureTestCase {
             }
         }
         return response;
+    }
+
+    protected File getImageFile(String pathToImage) throws URISyntaxException {
+        return Paths.get(this.getClass().getResource(pathToImage).toURI()).toFile();
+    }
+
+    private class TestServerMockRegistrar {
+
+        private HttpRequestBase request;
+
+        private String methodName = "extractHost";
+
+        private String pattern = "*";
+
+        public TestServerMockRegistrar(HttpRequestBase request) {
+            this.request = request;
+        }
+
+        public void register(HttpRequestHandler handler) throws Exception {
+            URI uri = request.getURI();
+            PowerMockito.mockStatic(URIUtils.class, withSettings()
+                .name(methodName)
+                .defaultAnswer(invocation -> invocation.getMethod().getName().equals(methodName) ? serverHttp() : uri)
+            );
+            PowerMockito.when(URIUtils.class, methodName, uri).thenReturn(serverHttp());
+
+            testServer.register(pattern, handler);
+        }
+
+        public void register(String pattern, HttpRequestHandler handler) throws Exception {
+            testServer.register(pattern, handler);
+        }
     }
 }
